@@ -75,31 +75,44 @@ class Lineaire(object):
         self.w = None
         self.loss, self.loss_g = loss, loss_g
         self.cost_history = []
-        self.classes_ = None  # (neg_class, pos_class)
 
     def _encode_y(self, y):
         """Convertit des labels {a,b} vers {-1,+1}."""
         y = np.asarray(y)
-        if self.classes_ is None:
-            vals = np.unique(y)
-            if vals.size != 2:
-                raise ValueError("Lineaire binaire: datay doit contenir exactement 2 classes.")
-            self.classes_ = (vals[0], vals[1])  # par ex (5,6)
-        neg, pos = self.classes_
+        pos = y[0]
         return np.where(y == pos, 1.0, -1.0)
 
-    def fit(self, datax, datay):
-        X = np.asarray(datax, dtype=float)
-        y = self._encode_y(datay)
+    def fit(self, datatrainx, datatrainy,datatestx=None, datatesty=None):
+        X = np.asarray(datatrainx, dtype=float)
+        y = self._encode_y(datatrainy)
 
         n, d = X.shape
         rng = np.random.default_rng(None)
         self.w = rng.normal(0.0, 0.01, size=d)
 
         self.cost_history = []
+        self.train_err_history = []
+        self.test_err_history = []
+
+        has_test = (datatestx is not None) and (datatesty is not None)
+        if has_test:
+            Xte = np.asarray(datatestx, dtype=float)
+            yte = np.asarray(datatesty, dtype=float)
+
         for _ in range(self.max_iter):
+            # coût (moyen) sur train
             c = self.loss(self.w, X, y)
             self.cost_history.append(c)
+
+            # erreur de classification
+            train_err = 1.0 - self.score(X, y)
+            self.train_err_history.append(train_err)
+
+            if has_test:
+                test_err = 1.0 - self.score(Xte, yte)
+                self.test_err_history.append(test_err)
+
+            # gradient + update
             g = self.loss_g(self.w, X, y)
             self.w = self.w - self.eps * g
 
@@ -109,14 +122,11 @@ class Lineaire(object):
         X = np.asarray(datax, dtype=float)
         scores = X @ self.w
         yhat_pm = np.where(scores >= 0, 1, -1)
-        # renvoyer dans l’espace des classes originales (ex: 5/6)
-        if self.classes_ is None:
-            return yhat_pm
-        neg, pos = self.classes_
-        return np.where(yhat_pm == 1, pos, neg)
+        return yhat_pm 
 
     def score(self, datax, datay):
         y = np.asarray(datay)
+        y = self._encode_y(y)
         yhat = self.predict(datax)
         return float(np.mean(yhat == y))
 
