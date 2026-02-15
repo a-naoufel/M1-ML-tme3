@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from mltools import plot_data, plot_frontiere, make_grid, gen_arti
+from mltools import *
 
 
 def perceptron_loss(w, x, y):
@@ -26,139 +26,51 @@ def perceptron_grad(w, x, y):
     grad = (-y[viol, None] * x[viol]).mean(axis=0)
     return grad
 
+def hinge_loss(w, x, y, alpha=1.0, lam=0.0):
+    """
+    x: (d,) ou (n,d)
+    y: scalaire ou (n,)
+    Retourne la moyenne sur n si batch.
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
 
-# class Lineaire(object):
-#     def __init__(self,loss=perceptron_loss,loss_g=perceptron_grad,max_iter=100,eps=0.01):
-#         self.max_iter, self.eps = max_iter,eps
-#         self.w = None
-#         self.loss,self.loss_g = loss,loss_g
-        
-#     def fit(self,datax,datay):
-#         X = np.asarray(datax, dtype=float)
-#         y = np.asarray(datay, dtype=float)
+    if x.ndim == 1:
+        margin = y * np.dot(x, w)
+        return max(0.0, alpha - margin) + lam * np.dot(w, w)
 
-#         n, d = X.shape
+    margins = y * (x @ w)
+    losses = np.maximum(0.0, alpha - margins)
+    return float(np.mean(losses) + lam * np.dot(w, w))
 
 
-#         rng = np.random.default_rng(None)
-#         self.w = rng.normal(0.0, 0.01, size=d)
+def hinge_loss_grad(w, x, y, alpha=1.0, lam=0.0):
+    """
+    Gradient du hinge + L2.
+    Pour un point:
+      si alpha - y<w,x> <= 0 -> grad = 2 lam w
+      sinon grad = -y x + 2 lam w
+    Batch: moyenne des contributions hinge + 2 lam w
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
 
-#         self.cost_history = []
+    reg = 2.0 * lam * w
 
-#         for _ in range(self.max_iter):
-#             # coût (moyen) sur le dataset
-#             c = self.loss(self.w, X, y)
-#             self.cost_history.append(c)
-
-#             # gradient (moyen) sur le dataset
-#             g = self.loss_g(self.w, X, y)
-
-#             # mise à jour
-#             self.w = self.w - self.eps * g
-
-#         return self
+    if x.ndim == 1:
+        margin = y * np.dot(x, w)
+        if alpha - margin <= 0:
+            return reg
+        return (-y * x) + reg
     
-#     def predict(self,datax):
-#         X = np.asarray(datax)
-#         scores = X @ self.w
-#         yhat = np.where(scores >= 0, 1, -1)
-#         return yhat
+    margins = y * (x @ w)
+    viol = (alpha - margins) > 0
+    if np.any(viol):
+        grad_hinge = (-y[viol, None] * x[viol]).mean(axis=0)
+    else:
+        grad_hinge = np.zeros_like(w)
 
-#     def score(self,datax,datay):
-#         y = np.asarray(datay)
-#         yhat = self.predict(datax)
-#         return float(np.mean(yhat == yclass Lineaire:
-# class Lineaire(object):
-#     def __init__(self, loss, loss_g, max_iter=50, eps=1e-2, w=None, random_state=None):
-#         self.loss = loss
-#         self.loss_g = loss_g
-#         self.max_iter = int(max_iter)  # nb d'époques
-#         self.eps = float(eps)
-#         self.random_state = random_state
-
-#         self.w = None if w is None else np.asarray(w, dtype=float)
-
-#         self.cost_history = []
-#         self.train_err_history = []
-#         self.test_err_history = []
-
-#     def predict(self, datax):
-#         X = np.asarray(datax)
-#         scores = X @ self.w
-#         return np.where(scores >= 0, 1, -1)
-
-#     def score(self, datax, datay):
-#         y = np.asarray(datay)
-#         yhat = self.predict(datax)
-#         return float(np.mean(yhat == y))
-
-#     def fit(self, datax, datay, testx=None, testy=None, batch_size=None, shuffle=True):
-#         """
-#         batch_size:
-#           - None -> batch complet (n)
-#           - 1    -> stochastique (SGD)
-#           - m    -> mini-batch
-#         max_iter = nb d'époques (pas nb d'updates)
-#         """
-#         X = np.asarray(datax, dtype=float)
-#         y = np.asarray(datay, dtype=float)
-#         n, d = X.shape
-
-#         has_test = (testx is not None) and (testy is not None)
-#         if has_test:
-#             Xte = np.asarray(testx, dtype=float)
-#             yte = np.asarray(testy, dtype=float)
-
-#         if self.w is None:
-#             rng = np.random.default_rng(self.random_state)
-#             self.w = rng.normal(0.0, 0.01, size=d)
-
-#         # Définir batch_size
-#         if batch_size is None:
-#             batch_size = n
-#         batch_size = int(batch_size)
-#         if batch_size < 1:
-#             raise ValueError("batch_size doit être >= 1")
-#         if batch_size > n:
-#             batch_size = n
-
-#         rng = np.random.default_rng(self.random_state)
-
-#         self.cost_history = []
-#         self.train_err_history = []
-#         self.test_err_history = []
-
-#         for epoch in range(self.max_iter):
-#             # --- évaluation "par époque" (avant ou après updates; ici avant) ---
-#             self.cost_history.append(self.loss(self.w, X, y))
-#             self.train_err_history.append(1.0 - self.score(X, y))
-#             if has_test:
-#                 self.test_err_history.append(1.0 - self.score(Xte, yte))
-
-#             # --- shuffle ---
-#             if shuffle:
-#                 perm = rng.permutation(n)
-#                 Xs, ys = X[perm], y[perm]
-#             else:
-#                 Xs, ys = X, y
-
-#             # --- mini-batch loop (updates) ---
-#             for start in range(0, n, batch_size):
-#                 end = min(start + batch_size, n)
-#                 Xb = Xs[start:end]
-#                 yb = ys[start:end]
-
-#                 # gradient moyenné sur le batch (votre perceptron_grad batch le fait déjà)
-#                 g = self.loss_g(self.w, Xb, yb)
-#                 self.w = self.w - self.eps * g
-
-#         # Option: ajouter les métriques après la dernière époque
-#         self.cost_history.append(self.loss(self.w, X, y))
-#         self.train_err_history.append(1.0 - self.score(X, y))
-#         if has_test:
-#             self.test_err_history.append(1.0 - self.score(Xte, yte))
-
-#         return self
+    return grad_hinge + reg
 
 
 def proj_biais(datax):
@@ -184,6 +96,22 @@ def proj_poly(datax):
     feats.append(np.hstack(quad) if quad else np.empty((n, 0)))
     return np.hstack(feats)
 
+def proj_gauss(datax, base, sigma):
+
+    X = np.asarray(datax, dtype=float)
+    B = np.asarray(base, dtype=float)
+    sigma = float(sigma)
+    if sigma <= 0:
+        raise ValueError("sigma doit être > 0")
+
+    # distances au carré: (n,b)
+    # (x - b)^2 = x^2 + b^2 - 2 x.b
+    X2 = np.sum(X**2, axis=1, keepdims=True)      # (n,1)
+    B2 = np.sum(B**2, axis=1, keepdims=True).T    # (1,b)
+    D2 = X2 + B2 - 2 * (X @ B.T)                  # (n,b)
+
+    Phi = np.exp(-D2 / (2.0 * sigma**2))
+    return Phi
 
 class Lineaire:
     def __init__(self, loss, loss_g, max_iter=50, eps=1e-2, w=None, projection=None):
@@ -289,14 +217,3 @@ def get_usps(l,datax,datay):
 def show_usps(data):
     plt.imshow(data.reshape((16,16)),interpolation="nearest",cmap="gray")
 
-
-
-if __name__ =="__main__":
-    uspsdatatrain = "../data/USPS_train.txt"
-    uspsdatatest = "../data/USPS_test.txt"
-    alltrainx,alltrainy = load_usps(uspsdatatrain)
-    alltestx,alltesty = load_usps(uspsdatatest)
-    neg = 5
-    pos = 6
-    datax,datay = get_usps([neg,pos],alltrainx,alltrainy)
-    testx,testy = get_usps([neg,pos],alltestx,alltesty)
